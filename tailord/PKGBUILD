@@ -1,0 +1,31 @@
+# Maintainer: Atul
+# Maintainer: Gemini
+pkgname=tailord
+pkgver=0.2.5
+pkgrel=1
+pkgdesc="Daemon handling fan, keyboard and general HW support for Tuxedo laptops"
+arch=('x86_64')
+url="https://github.com/AaronErhardt/tuxedo-rs"
+license=('GPL-2.0-or-later')
+depends=('glibc' 'gcc-libs')
+makedepends=('git' 'cargo')
+source=("git+${url}#tag=${pkgname}-v${pkgver}")
+sha256sums=('SKIP')
+
+build() {
+  cd "${srcdir}/tuxedo-rs/tailord"
+  # We build from inside the subfolder
+  cargo build --release --all-features
+}
+
+package() {
+  # The binary is actually in the root 'target' folder of the git repo
+  cd "${srcdir}/tuxedo-rs"
+  
+  install -Dm0755 -t "${pkgdir}/usr/bin" "target/release/${pkgname}"
+  install -Dm0644 -t "${pkgdir}/usr/share/dbus-1/system.d/" "tailord/com.tux.Tailor.conf"
+  
+  # Generate service file directly
+  printf "[Unit]\nDescription=Tuxedo Tailor\n[Service]\nExecStart=/usr/bin/tailord\n[Install]\nWantedBy=multi-user.target\n" > tailord.service
+  install -Dm0644 -t "${pkgdir}/usr/lib/systemd/system" "tailord.service"
+}

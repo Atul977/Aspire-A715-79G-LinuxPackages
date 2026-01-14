@@ -1,0 +1,87 @@
+name: Arch Linux Smart Repo Builder
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * *' 
+  workflow_dispatch:
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Check for New Upstream Commits
+        id: upstream_check
+        run: |
+          UPSTREAM_HASH=$(git ls-remote https://github.com/AaronErhardt/tuxedo-rs.git HEAD | awk '{ print $1 }')
+          if [ -f ".last_upstream_hash" ]; then
+            LOCAL_HASH=$(cat .last_upstream_hash)
+          else
+            LOCAL_HASH="none"
+          fi
+          if [ "$UPSTREAM_HASH" == "$LOCAL_HASH" ] && [ "${{ github.event_name }}" == "schedule" ]; then
+            echo "SKIP_BUILD=true" >> $GITHUB_OUTPUT
+          else
+            echo "SKIP_BUILD=false" >> $GITHUB_OUTPUT
+            echo "$UPSTREAM_HASH" > .last_upstream_hash
+          fi
+
+      - name: Build Packages in Arch Container
+        if: steps.upstream_check.outputs.SKIP_BUILD != 'true'
+        run: |
+          docker run --rm -v $(pwd):/main-dir -w /main-dir archlinux:latest bash -c "
+            pacman-key --init && pacman-key --populate archlinux
+            pacman -Syu --noconfirm base-devel git meson ninja rust cargo sudo gtk4 libadwaita dkms
+            useradd -m builder && echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+            chown -R builder:builder /main-dir
+
+            # Build all three packages explicitly
+            cd /main-dir/tuxedo-drivers-dkms && sudo -u builder makepkg --noconfirm -s || exit 1
+            cd /main-dir/tailord && sudo -u builder makepkg --noconfirm -s || exit 1
+            cd /main-dir/tailor-gui && sudo -u builder makepkg --noconfirm -s --nodeps || exit 1
+            
+            chown -R 1001:1001 /main-dir
+          "
+
+      - name: Organize Repo and Create Database
+        if: steps.upstream_check.outputs.SKIP_BUILD != 'true'
+        run: |
+          # 1. Prepare staging area
+          mkdir -p staging
+
+          # 2. Direct Copy (Fixes 'same file' loop error)
+          # We copy explicitly from build folders so we never accidentally copy 'staging' into itself
+          cp tuxedo-drivers-dkms/*.pkg.tar.zst staging/
+          cp tailord/*.pkg.tar.zst staging/
+          cp tailor-gui/*.pkg.tar.zst staging/
+          
+          # Remove any debug packages if they were generated
+          rm -f staging/*-debug-*.pkg.tar.zst
+
+          # 3. Create Repo Database
+          docker run --rm -v $(pwd)/staging:/repo -w /repo archlinux:latest bash -c "repo-add tuxedo-repo.db.tar.gz *.pkg.tar.zst"
+
+          # 4. Generate Simple Index (Fixes syntax error)
+          cd staging
+          echo "<html><body style='background:#121212;color:#eee;font-family:sans-serif;padding:40px;'>" > index.html
+          echo "<h1>Tuxedo Arch Repo</h1><hr><ul>" >> index.html
+          
+          for f in *.pkg.tar.zst; do
+            echo "<li><a href='$f' style='color:#00adb5;'>$f</a></li>" >> index.html
+          done
+          
+          echo "</ul><hr><p>Updated: $(date)</p></body></html>" >> index.html
+
+      - name: Update Hash and Deploy
+        if: steps.upstream_check.outputs.SKIP_BUILD != 'true'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./staging
+          publish_branch: gh-pages
+          

@@ -1,0 +1,52 @@
+# Maintainer: Steven Seifried <gitlab@canox.net>
+# Contributor: Steven Seifried <gitlab@canox.net>
+
+_pkgname=tuxedo-drivers
+pkgname=tuxedo-drivers-dkms
+pkgver=4.18.2
+pkgrel=1
+pkgdesc="TUXEDO Computers kernel module drivers for keyboard, keyboard backlight & general hardware I/O using the SysFS interface"
+url="https://github.com/Atul977/tuxedo-drivers"
+license=('GPL-2.0-or-later')
+arch=('x86_64')
+depends=('dkms')
+options=(!debug)
+optdepends=('linux-headers: build modules against Arch kernel'
+            'linux-lts-headers: build modules against LTS kernel'
+            'linux-zen-headers: build modules against ZEN kernel'
+            'linux-hardened-headers: build modules against the HARDENED kernel'
+            'udev-hid-bpf: resolve keyboard issues on the Sirius 16 Gen1/2')
+provides=('tuxedo-keyboard'
+          'tuxedo-keyboard-ite'
+          'tuxedo-io'
+          'clevo-wmi'
+          'clevo-acpi'
+          'uniwill-wmi'
+          'ite_8291'
+          'ite_8291_lb'
+          'ite_8297'
+          'ite_829x')
+conflicts=('tuxedo-keyboard-dkms' 'tuxedo-keyboard-ite-dkms')
+
+# Source points to your GitHub main branch zip
+source=("${pkgname%-dkms}-main.zip::https://github.com/Atul977/tuxedo-drivers/archive/refs/heads/main.zip")
+
+# Checksums set to SKIP because the main branch changes frequently
+sha256sums=('SKIP')
+sha512sums=('SKIP')
+
+package() {
+  # GitHub extracts the 'main' branch zip into a folder named 'repo-main'
+  local _srcdir="${_pkgname}-main"
+
+  install -Dm644 "$_srcdir"/debian/tuxedo-drivers.dkms "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
+  
+  # Inject the version number into dkms.conf
+  sed -i "s/#MODULE_VERSION#/$pkgver/g" "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
+
+  install -Dm644 "$_srcdir"/usr/lib/modprobe.d/*.conf -t "$pkgdir/usr/lib/modprobe.d/"
+  install -Dm644 "$_srcdir"/usr/lib/udev/rules.d/*.rules -t "$pkgdir/usr/lib/udev/rules.d/"
+  install -Dm644 "$_srcdir"/usr/lib/udev/hwdb.d/*.hwdb -t "$pkgdir/usr/lib/udev/hwdb.d/"
+
+  cp -r "$_srcdir"/src/* "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/"
+}

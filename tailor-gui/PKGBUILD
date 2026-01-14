@@ -1,0 +1,24 @@
+# Maintainer: Atul
+pkgname=tailor-gui
+pkgver=0.2.5
+pkgrel=1
+pkgdesc="Graphical client for tailord (part of tuxedo-rs)"
+arch=('x86_64')
+url="https://github.com/AaronErhardt/tuxedo-rs"
+license=('GPL-2.0-or-later')
+depends=('tailord' 'gtk4' 'libadwaita')
+makedepends=('git' 'cargo' 'meson' 'ninja')
+source=("git+${url}#tag=tailord-v${pkgver}")
+sha256sums=('SKIP')
+
+build() {
+  cd "${srcdir}/tuxedo-rs/tailor_gui"
+  # Arch-specific meson setup
+  meson setup --prefix=/usr --buildtype=release build
+  meson compile -C build
+}
+
+package() {
+  cd "${srcdir}/tuxedo-rs/tailor_gui"
+  DESTDIR="${pkgdir}" meson install -C build
+}
