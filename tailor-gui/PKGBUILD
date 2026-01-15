@@ -2,18 +2,31 @@
 pkgname=tailor-gui
 pkgver=0.2.5
 pkgrel=1
-pkgdesc="Graphical client for tailord (part of tuxedo-rs)"
+pkgdesc="Graphical client for tailord (Patched for Niri)"
 arch=('x86_64')
+# 1. Use the OFFICIAL upstream URL
 url="https://github.com/AaronErhardt/tuxedo-rs"
 license=('GPL-2.0-or-later')
 depends=('tailord' 'gtk4' 'libadwaita')
 makedepends=('git' 'cargo' 'meson' 'ninja')
-source=("git+${url}#tag=tailord-v${pkgver}")
-sha256sums=('SKIP')
+
+# 2. Include the official source AND your local fix file
+source=("git+${url}#tag=tailord-v${pkgver}"
+        "fixed_color_button.rs")
+
+# Skip checksums for local development ease
+sha256sums=('SKIP' 'SKIP')
+
+prepare() {
+  cd "${srcdir}/tuxedo-rs/tailor_gui"
+  
+  # 3. THE MAGIC: Overwrite the source code with your fix before building
+  echo "Applying Niri Color Picker Fix..."
+  cp "${srcdir}/fixed_color_button.rs" src/components/color_button.rs
+}
 
 build() {
   cd "${srcdir}/tuxedo-rs/tailor_gui"
-  # Arch-specific meson setup
   meson setup --prefix=/usr --buildtype=release build
   meson compile -C build
 }
