@@ -3,7 +3,7 @@
 
 _pkgname=tuxedo-drivers
 pkgname=tuxedo-drivers-dkms
-pkgver=1 # Dummy placeholder. pkgver() will auto-update this to 4.21.1!
+pkgver=4.21.1
 pkgrel=1
 pkgdesc="TUXEDO Computers kernel module drivers for keyboard, keyboard backlight & general hardware I/O using the SysFS interface"
 url="https://github.com/Atul977/tuxedo-drivers"
