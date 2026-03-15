@@ -10,7 +10,6 @@ url="https://github.com/Atul977/tuxedo-drivers"
 license=('GPL-2.0-or-later')
 arch=('x86_64')
 depends=('dkms')
-makedepends=('git')
 options=(!debug)
 optdepends=('linux-headers: build modules against Arch kernel'
             'linux-lts-headers: build modules against LTS kernel'
@@ -29,31 +28,28 @@ provides=('tuxedo-keyboard'
           'ite_829x')
 conflicts=('tuxedo-keyboard-dkms' 'tuxedo-keyboard-ite-dkms')
 
-# Point directly to YOUR fork via git to enable automatic versioning!
-source=("git+https://github.com/Atul977/tuxedo-drivers.git#branch=main"
+# Source points to your GitHub main branch zip AND your local dkms file
+source=("${pkgname%-dkms}-main.zip::https://github.com/Atul977/tuxedo-drivers/archive/refs/heads/main.zip"
         "tuxedo-drivers.dkms")
 
+# Checksums set to SKIP. Added a second SKIP for the new local file.
 sha256sums=('SKIP'
             'SKIP')
-
-pkgver() {
-  cd "tuxedo-drivers"
-  # This reads the tags from your fork to generate the version
-  git describe --long --tags | sed 's/\([^-]*-g\)/r\1/;s/-/./g;s/^v//'
-}
+sha512sums=('SKIP'
+            'SKIP')
 
 package() {
-  local _srcdir="tuxedo-drivers"
+  local _srcdir="${_pkgname}-main"
 
   # 1. Install your locally tracked DKMS file
   install -Dm644 "$srcdir/tuxedo-drivers.dkms" "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
   sed -i "s/#MODULE_VERSION#/$pkgver/g" "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
 
-  # 2. Grab the configs from the upstream 'files/' directory
-  install -Dm644 "$srcdir/$_srcdir"/files/usr/lib/modprobe.d/*.conf -t "$pkgdir/usr/lib/modprobe.d/"
-  install -Dm644 "$srcdir/$_srcdir"/files/usr/lib/udev/rules.d/*.rules -t "$pkgdir/usr/lib/udev/rules.d/"
-  install -Dm644 "$srcdir/$_srcdir"/files/usr/lib/udev/hwdb.d/*.hwdb -t "$pkgdir/usr/lib/udev/hwdb.d/"
+  # 2. Grab the configs from their new 'files/' location upstream
+  install -Dm644 "$_srcdir"/files/usr/lib/modprobe.d/*.conf -t "$pkgdir/usr/lib/modprobe.d/"
+  install -Dm644 "$_srcdir"/files/usr/lib/udev/rules.d/*.rules -t "$pkgdir/usr/lib/udev/rules.d/"
+  install -Dm644 "$_srcdir"/files/usr/lib/udev/hwdb.d/*.hwdb -t "$pkgdir/usr/lib/udev/hwdb.d/"
 
   # 3. Copy the actual source files for DKMS to compile
-  cp -r "$srcdir/$_srcdir"/src/* "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/"
+  cp -r "$_srcdir"/src/* "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/"
 }
