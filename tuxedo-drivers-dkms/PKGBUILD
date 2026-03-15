@@ -28,18 +28,22 @@ provides=('tuxedo-keyboard'
           'ite_829x')
 conflicts=('tuxedo-keyboard-dkms' 'tuxedo-keyboard-ite-dkms')
 
-# Source points to your GitHub main branch zip
-source=("${pkgname%-dkms}-main.zip::https://github.com/Atul977/tuxedo-drivers/archive/refs/heads/main.zip")
+# Source points to your GitHub main branch zip AND your local dkms file
+source=("${pkgname%-dkms}-main.zip::https://github.com/Atul977/tuxedo-drivers/archive/refs/heads/main.zip"
+        "tuxedo-drivers.dkms")
 
-# Checksums set to SKIP because the main branch changes frequently
-sha256sums=('SKIP')
-sha512sums=('SKIP')
+# Checksums set to SKIP. Added a second SKIP for the new local file.
+sha256sums=('SKIP'
+            'SKIP')
+sha512sums=('SKIP'
+            'SKIP')
 
 package() {
   # GitHub extracts the 'main' branch zip into a folder named 'repo-main'
   local _srcdir="${_pkgname}-main"
 
-  install -Dm644 "$_srcdir"/debian/tuxedo-drivers.dkms "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
+  # Install the locally tracked DKMS file from the root $srcdir, renaming it to dkms.conf
+  install -Dm644 "$srcdir/tuxedo-drivers.dkms" "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
   
   # Inject the version number into dkms.conf
   sed -i "s/#MODULE_VERSION#/$pkgver/g" "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
