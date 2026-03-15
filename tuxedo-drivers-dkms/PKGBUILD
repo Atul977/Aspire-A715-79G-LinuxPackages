@@ -39,18 +39,18 @@ sha512sums=('SKIP'
             'SKIP')
 
 package() {
-  # GitHub extracts the 'main' branch zip into a folder named 'repo-main'
   local _srcdir="${_pkgname}-main"
 
-  # Install the locally tracked DKMS file from the root $srcdir, renaming it to dkms.conf
+  # 1. Install your locally tracked DKMS file
   install -Dm644 "$srcdir/tuxedo-drivers.dkms" "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
-  
-  # Inject the version number into dkms.conf
   sed -i "s/#MODULE_VERSION#/$pkgver/g" "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/dkms.conf"
 
-  install -Dm644 "$_srcdir"/usr/lib/modprobe.d/*.conf -t "$pkgdir/usr/lib/modprobe.d/"
-  install -Dm644 "$_srcdir"/usr/lib/udev/rules.d/*.rules -t "$pkgdir/usr/lib/udev/rules.d/"
-  install -Dm644 "$_srcdir"/usr/lib/udev/hwdb.d/*.hwdb -t "$pkgdir/usr/lib/udev/hwdb.d/"
+  # 2. Grab the configs from their new 'files/' location upstream
+  install -Dm644 "$_srcdir"/files/usr/lib/modprobe.d/*.conf -t "$pkgdir/usr/lib/modprobe.d/"
+  install -Dm644 "$_srcdir"/files/usr/lib/udev/rules.d/*.rules -t "$pkgdir/usr/lib/udev/rules.d/"
+  install -Dm644 "$_srcdir"/files/usr/lib/udev/hwdb.d/*.hwdb -t "$pkgdir/usr/lib/udev/hwdb.d/"
 
+  # 3. Copy the actual source files for DKMS to compile
   cp -r "$_srcdir"/src/* "$pkgdir/usr/src/${pkgname%-dkms}-$pkgver/"
 }
+
