@@ -1,10 +1,12 @@
 name: Arch Linux Smart Repo Builder
 on:
-  push:
-    branches: [ main ]
   schedule:
-    - cron: '0 0 * * *' 
-  workflow_dispatch:
+    - cron: '0 0 * * 0'   # Sundays 00:00 UTC
+  workflow_dispatch:       # manual "Run workflow" button
+
+concurrency:
+  group: arch-repo-build
+  cancel-in-progress: false
 
 jobs:
   check-and-build:
@@ -24,11 +26,13 @@ jobs:
           else
             LOCAL_HASH="none"
           fi
+          echo "UPSTREAM_HASH=$UPSTREAM_HASH" >> $GITHUB_OUTPUT
+          # Skip only on scheduled runs with no upstream change.
+          # Manual runs always build.
           if [ "$UPSTREAM_HASH" == "$LOCAL_HASH" ] && [ "${{ github.event_name }}" == "schedule" ]; then
             echo "SKIP_BUILD=true" >> $GITHUB_OUTPUT
           else
             echo "SKIP_BUILD=false" >> $GITHUB_OUTPUT
-            echo "$UPSTREAM_HASH" > .last_upstream_hash
           fi
 
       - name: Build Packages in Arch Container
@@ -44,44 +48,55 @@ jobs:
             cd /main-dir/tuxedo-drivers-dkms && sudo -u builder makepkg --noconfirm -s || exit 1
             cd /main-dir/tailord && sudo -u builder makepkg --noconfirm -s || exit 1
             cd /main-dir/tailor-gui && sudo -u builder makepkg --noconfirm -s --nodeps || exit 1
-            
-            chown -R 1001:1001 /main-dir
+
+            # Hand ownership back to the runner user (expanded on the host)
+            chown -R $(id -u):$(id -g) /main-dir
           "
 
       - name: Organize Repo and Create Database
         if: steps.upstream_check.outputs.SKIP_BUILD != 'true'
         run: |
-          # 1. Prepare staging area
           mkdir -p staging
 
-          # 2. Direct Copy (Fixes 'same file' loop error)
-          # We copy explicitly from build folders so we never accidentally copy 'staging' into itself
           cp tuxedo-drivers-dkms/*.pkg.tar.zst staging/
           cp tailord/*.pkg.tar.zst staging/
           cp tailor-gui/*.pkg.tar.zst staging/
-          
-          # Remove any debug packages if they were generated
+
+          # Remove any debug packages
           rm -f staging/*-debug-*.pkg.tar.zst
 
-          # 3. Create Repo Database
           docker run --rm -v $(pwd)/staging:/repo -w /repo archlinux:latest bash -c "repo-add tuxedo-repo.db.tar.gz *.pkg.tar.zst"
 
-          # 4. Generate Simple Index (Fixes syntax error)
           cd staging
           echo "<html><body style='background:#121212;color:#eee;font-family:sans-serif;padding:40px;'>" > index.html
           echo "<h1>Tuxedo Arch Repo</h1><hr><ul>" >> index.html
-          
+
           for f in *.pkg.tar.zst; do
             echo "<li><a href='$f' style='color:#00adb5;'>$f</a></li>" >> index.html
           done
-          
+
           echo "</ul><hr><p>Updated: $(date)</p></body></html>" >> index.html
 
-      - name: Update Hash and Deploy
+      - name: Deploy to gh-pages
         if: steps.upstream_check.outputs.SKIP_BUILD != 'true'
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./staging
           publish_branch: gh-pages
-          
+
+      # Runs only after a successful build + deploy, so a failed build
+      # never records the hash and gets retried next week.
+      - name: Commit Upstream Hash
+        if: steps.upstream_check.outputs.SKIP_BUILD != 'true'
+        run: |
+          echo "${{ steps.upstream_check.outputs.UPSTREAM_HASH }}" > .last_upstream_hash
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .last_upstream_hash
+          if git diff --cached --quiet; then
+            echo "Hash unchanged, nothing to commit."
+          else
+            git commit -m "chore: record upstream hash"
+            git push
+          fi
